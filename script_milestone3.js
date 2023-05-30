@@ -91,7 +91,7 @@ function processActorNames(actors_map) {
     return actors_names;
 }
 
-let maxNodes = 12; // Initial value
+let maxNodes = 20; // Initial value
 
 async function setup() {
     const [actors_map, directors_map, directors_movies, movies_map, info_actor, info_director, movies_info_map, actorPopularityMap] = await Promise.all([
