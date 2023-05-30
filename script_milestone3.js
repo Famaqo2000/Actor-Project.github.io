@@ -119,7 +119,7 @@ async function setup() {
             const actorsInfo = updateGraph(actorName, actors_map, info_dict, movies_map, movies_info_map, directors_map, actorPopularityMap, graph_type);
             displayActorInfo(actorName, actorsInfo, movies_map, directors_map);
         }
-    };
+    }; 
 
     actorInput.addEventListener("input", function () {
         let timeout = null;
@@ -149,6 +149,8 @@ async function setup() {
 
     // Set the default value
     actorInput.value = "Heath Ledger";
+    graphType.value = "actor";
+    graphType.dispatchEvent(new Event('change'));
     // Update and display the graph with default actor
     updateAndDisplay("Heath Ledger");
 }
