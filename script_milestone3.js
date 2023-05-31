@@ -5,6 +5,7 @@ const infoActorPath = 'all_actors_info.json'
 const infoDirectorPath = 'all_directors_info.json'
 const moviesInfosPath = 'movie_info_map.json'
 const mostPopularActorPath = 'most_famous_actor.json'
+const mostPopularDirectorPath = 'most_famous_director.json'
 const directorsMoviesPath = 'directors_movies.json'
 
 async function readDirectorsFile(filePath) {
@@ -92,9 +93,10 @@ function processActorNames(actors_map) {
 }
 
 let maxNodes = 20; // Initial value
+let actors_map, directors_map, directors_movies, movies_map, info_actor, info_director, movies_info_map, actorPopularityMap, directorPopularityMap;
 
 async function setup() {
-    const [actors_map, directors_map, directors_movies, movies_map, info_actor, info_director, movies_info_map, actorPopularityMap] = await Promise.all([
+    const [actors_map, directors_map, directors_movies, movies_map, info_actor, info_director, movies_info_map, actorPopularityMap, directorPopularityMap] = await Promise.all([
         readActorsFile(actorsPath),
         readDirectorsFile(directorsPath),
         readDirectorsMoviesFile(directorsMoviesPath),
@@ -102,7 +104,8 @@ async function setup() {
         readInfoActor(infoActorPath),
         readInfoDirector(infoDirectorPath),
         readMoviesInfosFile(moviesInfosPath),
-        readMoviesInfosFile(mostPopularActorPath)
+        readMoviesInfosFile(mostPopularActorPath),
+        readMoviesInfosFile(mostPopularDirectorPath)
     ]);
 
     const actors_names = processActorNames(actors_map);
@@ -112,14 +115,15 @@ async function setup() {
     const graphType = document.getElementById("graph-type");
 
     var graph_type = graphType.value;
-    var info_dict = graph_type.value === "actor" ? info_actor : info_director;
+    var popularityMap = actorPopularityMap;
 
     const updateAndDisplay = (actorName) => {
         if (actorName) {
-            const actorsInfo = updateGraph(actorName, actors_map, info_dict, movies_map, movies_info_map, directors_map, actorPopularityMap, graph_type);
+
+            const actorsInfo = updateGraph(actorName, actors_map, info_actor, info_director, movies_map, movies_info_map, directors_map, popularityMap, directors_movies, graph_type);
             displayActorInfo(actorName, actorsInfo, movies_map, directors_map);
         }
-    }; 
+    };
 
     actorInput.addEventListener("input", function () {
         let timeout = null;
@@ -133,8 +137,7 @@ async function setup() {
 
     graphType.addEventListener("change", function () {
         graph_type = this.value;
-        info_dict = this.value === "actor" ? info_actor : info_director;
-        console.log(info_dict)
+        popularityMap = this.value === "actor" ? actorPopularityMap : directorPopularityMap;
         updateAndDisplay(actorInput.value.trim());
     });
 
@@ -149,8 +152,6 @@ async function setup() {
 
     // Set the default value
     actorInput.value = "Heath Ledger";
-    graphType.value = "actor";
-    graphType.dispatchEvent(new Event('change'));
     // Update and display the graph with default actor
     updateAndDisplay("Heath Ledger");
 }
@@ -160,12 +161,9 @@ function updateGraphWithInputs() {
     const actorName = document.getElementById("actor-input").value.trim();
     const graphTypeValue = document.getElementById("graph-type").value;
 
-    // Determine info dictionary
-    var info_dict = graphTypeValue == "actor" ? info_actor : info_director;
-
     // Update the graph
     if (actorName) {
-        const actorsInfo = updateGraph(actorName, actors_map, info_dict, movies_map, movies_info_map, directors_map, actorPopularityMap, graphTypeValue);
+        const actorsInfo = updateGraph(actorName, actors_map, info_actor, info_director, movies_map, movies_info_map, directors_map, popularityMap, graphTypeValue);
         displayActorInfo(actorName, actorsInfo, movies_map, directors_map);
     }
 }
@@ -185,25 +183,31 @@ window.addEventListener('DOMContentLoaded', (event) => {
 
 
 
-function updateGraph(actorName, actors_map, info_dict, movies_map, movies_info_map, directors_map, actorPopularityMap, graph_type){
+function updateGraph(actorName, actors_map, info_actor, info_director, movies_map, movies_info_map, directors_map, actorPopularityMap, directors_movies, graph_type){
+    
+    if (graph_type == "actor"){
+        var actorOrDirectorMap = actors_map
+        var infoActorOrDirector = info_actor
+    }
+    else{
+        var actorOrDirectorMap = directors_map
+        var infoActorOrDirector = info_director
+
+    }
+
     const principal_actor_id = actors_map[actorName] 
+    const principal_info_actor = infoActorOrDirector[principal_actor_id]
 
-    const info_actor = info_dict[principal_actor_id]
+    var related_actor_ids =  principal_info_actor["Played_with_ids"].slice()
+    var related_actor_names = related_actor_ids.map(id => getNameById(id, actorOrDirectorMap));
 
-    var related_actor_ids =  info_actor["Played_with_ids"].slice()
-
-    related_actor_ids.unshift(principal_actor_id)
-
-    var related_actor_names = related_actor_ids.map(id => getNameById(id, actors_map));
-
+    related_actor_names.unshift(getNameById(principal_actor_id, actors_map))
     const related_actor_size = related_actor_names.length
     
-    const actorAdjacencyMatrix = generateAdjacencyMatrix(related_actor_size);
-
-    const actorsInfo = generateActorsInfo(related_actor_size, related_actor_names, info_dict, actors_map, movies_map, movies_info_map);
-
-    const actorSharedMoviesMatrix = initializeActorSharedMoviesMatrix(related_actor_size, related_actor_names, info_dict, actors_map, movies_map, principal_actor_id);
-
+    const actorAdjacencyMatrix = generateAdjacencyMatrix(related_actor_size, graph_type);
+    const actorsInfo = generateActorsInfo(related_actor_size, related_actor_names, infoActorOrDirector, actorOrDirectorMap, actors_map, movies_map, movies_info_map, directors_movies, graph_type);
+    const actorSharedMoviesMatrix = initializeActorSharedMoviesMatrix(related_actor_size, related_actor_names, infoActorOrDirector, actorOrDirectorMap, movies_map, principal_actor_id);
+    
     drawGraph(actorName, related_actor_names, actorAdjacencyMatrix, actorsInfo, actorSharedMoviesMatrix, movies_map, directors_map, actorPopularityMap, graph_type);
 
     return actorsInfo;
@@ -220,7 +224,10 @@ function updateActorSuggestions(actors) {
     });
   }
 
-function generateAdjacencyMatrix(size) {
+function generateAdjacencyMatrix(size, graph_type) {
+    if(graph_type == "director"){
+        size = size + 1;
+    }
     const matrix = [];
     for (let i = 0; i < size; i++) {
         const row = [];
@@ -245,14 +252,19 @@ function generateAdjacencyMatrix(size) {
     return matrix;
 }
 
-function initializeActorSharedMoviesMatrix(size, related_actor_names, info_dict, actors_map, movies_map, principal_actor_id) {
+function initializeActorSharedMoviesMatrix(size, related_actor_names, infoActorOrDirector, actorOrDirectorMap, movies_map, principal_actor_id) {
     const shared_matrix = [];
 
-
+    console.log("==========================Initialize share matrix =========================")
     for (let i = 1; i < size; i++) {
         const actorName = related_actor_names[i];
-        const actorId = getIdByName(actorName, actors_map)
-        shared_movies = info_dict[principal_actor_id][actorId].map(m_id => getNameById(m_id, movies_map))
+        const actorId = getIdByName(actorName, actorOrDirectorMap)
+        
+        console.log("director i name: ", actorName)
+        console.log("director i id: ", actorId)
+        console.log("info:", infoActorOrDirector[principal_actor_id][actorId])
+        console.log("--------")
+        shared_movies = infoActorOrDirector[principal_actor_id][actorId].map(m_id => getNameById(m_id, movies_map))
         shared_matrix.push(shared_movies);
         
     }
@@ -260,20 +272,6 @@ function initializeActorSharedMoviesMatrix(size, related_actor_names, info_dict,
     return shared_matrix;
 }
 
-function initializeDirectorSharedMoviesMatrix(size, related_director_names, info_dict, directors_map, movies_map, principal_actor_id) {
-    const shared_matrix = [];
-
-
-    for (let i = 1; i < size; i++) {
-        const directorName = related_director_names[i];
-        const directorId = getIdByName(directorName, directors_map)
-        shared_movies = info_dict[principal_actor_id][1][directorId].map(m_id => getNameById(m_id, movies_map))
-        shared_matrix.push(shared_movies);
-        
-    }
-    shared_matrix.unshift([])
-    return shared_matrix;
-}
 
 function getNameById(id, nameIdMapping) {
     for (const [name, idInMapping] of Object.entries(nameIdMapping)) {
@@ -293,18 +291,32 @@ function getNameById(id, nameIdMapping) {
     return null; // return null if the ID is not found in the mapping
   }
 
-  function generateActorsInfo(size, related_actor_names, info_dict, actors_map, movies_map, movie_info_map) {
+  function generateActorsInfo(size, related_actor_names, infoActorOrDirector, actorOrDirectorMap, actors_map, movies_map, movie_info_map, directors_movies, graph_type) {
     const actorsInfo = {};
+    var related_actor_names_unique = [...new Set(related_actor_names)];
 
     for (let i = 0; i <= size; i++) {
-        const actorName = related_actor_names[i];
-        const actorId = getIdByName(actorName, actors_map);
+        if (i == 0){
+            var corresponding_map = actors_map;
+        }
+        else{
+            var corresponding_map = actorOrDirectorMap;
+        }
+        const actorName = related_actor_names_unique[i];
+        const actorId = getIdByName(actorName, corresponding_map);
         
-        const available_ids = Object.keys(info_dict);
+        const available_ids = Object.keys(infoActorOrDirector);
+
 
         if (actorId in available_ids){
-            var Own_movies_ids = info_dict[actorId]["Own_movies"];
-            var Own_movies_title = info_dict[actorId]["Own_movies"].map(m_id => getNameById(m_id, movies_map));
+            if ((graph_type == "actor") || (i == 0)){
+                var Own_movies_ids = infoActorOrDirector[actorId]["Own_movies"];
+                var Own_movies_title = infoActorOrDirector[actorId]["Own_movies"].map(m_id => getNameById(m_id, movies_map));
+            }
+            else{
+                var Own_movies_ids = directors_movies[actorId];
+                var Own_movies_title = directors_movies[actorId].map(m_id => getNameById(m_id, movies_map));
+            }
         }
         else{
             // Convert the hardcoded movie titles to movie IDs using movies_map
@@ -328,39 +340,6 @@ function getNameById(id, nameIdMapping) {
     return actorsInfo;
 }
 
-function generateDirectorsInfo(size, related_director_names, info_dict, directors_map, movies_map, movie_info_map, directors_movies) {
-    const directorsInfo = {};
-
-    for (let i = 0; i <= size; i++) {
-        const directorName = related_director_names[i];
-        const directorId = getIdByName(directorName, directors_map);
-        
-        const available_ids = Object.keys(info_dict);
-        if (directorId in available_ids){
-            var Own_movies_ids = directors_movies[directorId];
-            var Own_movies_title = directors_movies[directorId].map(m_id => getNameById(m_id, movies_map));
-        }
-        else{
-            // Convert the hardcoded movie titles to movie IDs using movies_map
-            var Own_movies_ids = ["Inception", "Interstellar", "To be updated"].map(title => movies_map[title]);
-        }
-
-        const listOfMovies = {};
-        Own_movies_ids.forEach(movie_id => {
-            if (movie_id in movie_info_map) {
-                listOfMovies[movie_id] = movie_info_map[movie_id];
-            }
-        });
-
-        directorsInfo[directorName] = {
-            name: directorName,
-            id: directorId,
-            listOfMovies: listOfMovies,
-            movie_title: Own_movies_title
-        };
-    }
-    return directorsInfo;
-}
 
 
 
@@ -376,7 +355,6 @@ function countMovieGenres(movies) {
 }
 function displayActorInfo(actorName, actorsInfo, movie_map, directors_map) {
     const actor = actorsInfo[actorName];
-
     var list_actor_mean_genre = []
 
     const keys = Object.keys(actorsInfo);
@@ -829,9 +807,13 @@ function generateRandomAdjacencyMatrix(size) {
     }
     return matrix;
   }
+        //drawGraph(actorName, related_actor_names, actorAdjacencyMatrix, actorsInfo, actorSharedMoviesMatrix, movies_map, directors_map, actorPopularityMap, graph_type);
 
 function drawGraph(actorName, actors, adjacencyMatrix, actorsInfo, sharedMoviesMatrix, movie_map, directors_map, actorPopularityMap, graph_type) {
-    const graphData = generateGraphData(actorName, actors, adjacencyMatrix, actorPopularityMap );
+    
+    
+    const graphData = generateGraphData(actorName, actors, adjacencyMatrix, actorPopularityMap, graph_type );
+
 
     if (!graphData) {
         return;
@@ -858,6 +840,7 @@ function drawGraph(actorName, actors, adjacencyMatrix, actorsInfo, sharedMoviesM
 
         links.each(function (d) {
             this.addEventListener("click", function () {
+                console.log("link listener",sharedMoviesMatrix)
                 displaySharedMoviesInfo(d.source.name, d.target.name, sharedMoviesMatrix, actors);
             });
         });
@@ -891,6 +874,7 @@ function drawGraph(actorName, actors, adjacencyMatrix, actorsInfo, sharedMoviesM
             displayActorInfo(d.name, actorsInfo, movie_map, directors_map);
            
             if (d.name != actorName) {
+                console.log("node listener",sharedMoviesMatrix)
                 displaySharedMoviesInfo(actorName, d.name, sharedMoviesMatrix, actors);
             }
         });
@@ -945,7 +929,14 @@ function drawGraph(actorName, actors, adjacencyMatrix, actorsInfo, sharedMoviesM
 }
 
 function displaySharedMoviesInfo(actor1, actor2, sharedMoviesMatrix, actors) {
-    const index = actors.indexOf(actor2);
+    var unique = actors.filter((value, index, array) => array.indexOf(value) === index);
+
+    const index = unique.indexOf(actor2);
+    console.log("actor1",actor1)
+    console.log("actor2",actor2)
+    console.log("actorrs",actors)
+
+    console.log("displaySharedMoviesInfo SMM",sharedMoviesMatrix)
 
     if (index !== -1) {
         const sharedMovies = sharedMoviesMatrix[index];
@@ -959,10 +950,17 @@ function displaySharedMoviesInfo(actor1, actor2, sharedMoviesMatrix, actors) {
     }
 }
 
-function generateGraphData(actorName, actors, adjacencyMatrix, actorPopularityMap) {
+function generateGraphData(actorName, actors, adjacencyMatrix, actorPopularityMap, graph_type) {
+  
+    if (graph_type == "director"){
+        actors.unshift(actorName);
+
+    }
+
     const actorIndex = actors.indexOf(actorName);
 
     if (actorIndex === -1) {
+
         return null;
     }
 
@@ -995,8 +993,10 @@ function generateGraphData(actorName, actors, adjacencyMatrix, actorPopularityMa
         })
         .slice(0, maxNodes - 1); // Subtract 1 to leave room for the searched actor
 
+
     sortedActors.push(...remainingActors);
 
+  
     sortedActors.forEach(sortedActor => {
         nodes.push({ name: sortedActor.name });
     });
@@ -1016,6 +1016,4 @@ function generateGraphData(actorName, actors, adjacencyMatrix, actorPopularityMa
         links: links,
     };
 }
-
-
 
